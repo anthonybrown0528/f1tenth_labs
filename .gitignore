@@ -269,3 +269,9 @@ TSWLatexianTemp*
 
 # Makeindex log files
 *.lpz
+
+# VSCode config
+.vscode
+
+# build folder
+build/

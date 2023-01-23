@@ -15,11 +15,14 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package()
 include_directories(
+  include
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(safety_node src/safety_node.cpp)
+add_library(${PROJECT_NAME} src/safety.cpp)
+add_executable(${PROJECT_NAME}_node src/safety_node.cpp)
 
-target_link_libraries(safety_node
+target_link_libraries(${PROJECT_NAME}_node
+  ${PROJECT_NAME}
   ${catkin_LIBRARIES}
 )
