@@ -22,11 +22,7 @@ private:
     Safety safety;
 
 public:
-    SafetyNode(int argc, char** argv, std::string name) {
-        ros::init(argc, argv, name);
-
-        n = ros::NodeHandle();
-
+    SafetyNode() : safety(0.5f) {
         std::string scan_topic;
         std::string odom_topic;
         std::string brake_bool_topic;
@@ -65,8 +61,12 @@ public:
         scan_subscriber = n.subscribe<sensor_msgs::LaserScan>(scan_topic, subscriber_queue_size, &SafetyNode::scan_callback, this);
         odom_subscriber = n.subscribe<nav_msgs::Odometry>(odom_topic, subscriber_queue_size, &SafetyNode::odom_callback, this);
 
-        brake_bool_publisher = n.advertise<sensor_msgs::LaserScan>(scan_topic, publisher_queue_size);
-        brake_publisher = n.advertise<sensor_msgs::LaserScan>(scan_topic, publisher_queue_size);
+        brake_bool_publisher = n.advertise<std_msgs::Bool>(brake_bool_topic, publisher_queue_size);
+        brake_publisher = n.advertise<ackermann_msgs::AckermannDriveStamped>(brake_topic, publisher_queue_size);
+    }
+
+    ~SafetyNode() {
+        n.shutdown();
     }
 
     void odom_callback(const nav_msgs::Odometry::ConstPtr &odom_msg) {
@@ -86,16 +86,15 @@ public:
         should_stop = safety.SafetyCheck(scan_msg->ranges, angles);
 
         if(should_stop) {
-            brake_bool_msg.data = should_stop;
+            brake_bool_msg.data = true;
 
-            brake_msg.drive.steering_angle = 0.0f;
-            brake_msg.drive.steering_angle_velocity = 0.0f;
-            brake_msg.drive.acceleration = 0.0f;
-            brake_msg.drive.jerk = 0.0f;
-            brake_msg.drive.speed = 0.0f;
+            brake_msg.header.stamp = ros::Time::now();
+            brake_msg.drive.speed = 0.0;
 
             brake_publisher.publish(brake_msg);
             brake_bool_publisher.publish(brake_bool_msg);
+
+            should_stop = false;
         }
     }
 
@@ -103,9 +102,12 @@ public:
 
 int main(int argc, char ** argv) {
 
-    // Construct and spin ROS node
-    SafetyNode sn(argc, argv, "safety_node");
+    ros::init(argc, argv, "safety_node");
 
+    // Construct ROS node
+    SafetyNode sn;
+
+    // Spin ROS node
     ros::spin();
     return 0;
 }

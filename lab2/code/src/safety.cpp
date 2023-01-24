@@ -37,6 +37,8 @@ double Safety::CalculateTTC(const double &speed, const double &distance, const d
 
     // Projection of the velocity onto the distance
     double speed_projection = speed * cos(angle);
+    speed_projection = std::max(speed_projection, 0.0);
+
     return distance / speed_projection;
 }
 
