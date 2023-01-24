@@ -10,9 +10,9 @@ from sensor_msgs.msg import Image, LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped, AckermannDrive
 
 #PID CONTROL PARAMS
-kp = #TODO
-kd = #TODO
-ki = #TODO
+kp = 5
+kd = 0
+ki = 0
 servo_offset = 0.0
 prev_error = 0.0 
 error = 0.0
@@ -31,18 +31,27 @@ class WallFollow:
     def __init__(self):
         #Topics & Subs, Pubs
         lidarscan_topic = '/scan'
-        drive_topic = '/nav'
+        drive_topic = '/drive'
 
-        self.lidar_sub = #TODO: Subscribe to LIDAR
-        self.drive_pub = #TODO: Publish to drive
+        # specify publisher queue size
+        queue_size = 1000
+
+        self.lidar_sub = rospy.Subscriber(lidarscan_topic, LaserScan, self.lidar_callback)
+        self.drive_pub = rospy.Publisher(drive_topic, AckermannDriveStamped, queue_size=queue_size)
 
     def getRange(self, data, angle):
         # data: single message from topic /scan
         # angle: between -45 to 225 degrees, where 0 degrees is directly to the right
         # Outputs length in meters to object with angle in lidar scan field of view
         #make sure to take care of nans etc.
-        #TODO: implement
-        return 0.0
+
+        angle_offset = angle - data.angle_min
+
+        desired = angle_offset / data.angle_increment
+        desired = int(desired)
+
+        # return distance at specified angle
+        return data.ranges[desired]
 
     def pid_control(self, error, velocity):
         global integral
@@ -50,8 +59,29 @@ class WallFollow:
         global kp
         global ki
         global kd
+        derivative = 0.0
         angle = 0.0
-        #TODO: Use kp, ki & kd to implement a PID controller for 
+
+        derivative = error - prev_error
+        integral += error
+
+        # Compute PID terms
+        p = kp * error
+        i = ki * integral
+        d = kd * derivative
+
+        prev_error = error
+
+        # Compute control signal
+        angle = p + i + d
+
+        if angle >= math.radians(0) and angle <= math.radians(10):
+            velocity = 1.5
+        elif angle >= math.radians(0) and angle <= math.radians(10):
+            velocity = 1.0
+        else:
+            velocity = 0.5
+
         drive_msg = AckermannDriveStamped()
         drive_msg.header.stamp = rospy.Time.now()
         drive_msg.header.frame_id = "laser"
@@ -61,13 +91,31 @@ class WallFollow:
 
     def followLeft(self, data, leftDist):
         #Follow left wall as per the algorithm 
-        #TODO:implement
-        return 0.0 
+
+        # angle pointing to car's left
+        angle_right = -math.pi + math.radians(90)
+
+        # angle sampled from car's right side
+        sample_angle = angle_right + math.radians(70)
+
+        a = self.getRange(data, sample_angle)
+        b = self.getRange(data, angle_right)
+
+        theta = sample_angle - angle_right
+
+        alpha = math.atan2(a * math.cos(theta) - b, a * math.sin(theta))
+
+        # current distance from wall
+        distance = b * math.cos(alpha)
+        # prediction of next distance
+        next_distance = distance + CAR_LENGTH * math.sin(alpha)
+
+        return leftDist - next_distance
 
     def lidar_callback(self, data):
         """ 
         """
-        error = 0.0 #TODO: replace with error returned by followLeft
+        error = self.followLeft(data, DESIRED_DISTANCE_LEFT)
         #send error to pid_control
         self.pid_control(error, VELOCITY)
 
